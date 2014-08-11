@@ -22,6 +22,7 @@
 
 // ----------------------------------------------------------------------------
 // stb_truetype, ported to C# by James Bellinger             Aug 2010, May 2012
+// Updated by Steve Williams
 // This file kept rather similar to the original, to make merging fixes easier.
 // To avoid exposing the greatness of FakePtr<T> and the ugliness of my port,
 // the public API is separate.
@@ -35,7 +36,8 @@ namespace TrueTypeSharp
 {
     static class stb_truetype
     {
-// stb_truetype.h - v0.5 - public domain - 2009 Sean Barrett / RAD Game Tools
+// stb_truetype.h - v0.9 - public domain
+// authored from 2009-2013 by Sean Barrett / RAD Game Tools
 //
 //   This library processes TrueType files:
 //        parse files
@@ -63,26 +65,44 @@ namespace TrueTypeSharp
 //       stoiko (Haemimont Games)
 //       Brian Hook 
 //       Walter van Niftrik
+//       David Gow
+//       David Given
+//       Ivan-Assen Ivanov
+//       Anthony Pesch
+//       Johan Duparc
+//       Hou Qiming
 //
 // VERSION HISTORY
 //
-//   0.5 (2011-12-09) bugfixes:
+//   0.9  (2014-08-07) support certain mac/iOS fonts without an MS platformID
+//   0.8b (2014-07-07) fix a warning
+//   0.8  (2014-05-25) fix a few more warnings
+//   0.7  (2013-09-25) bugfix: subpixel glyph bug fixed in 0.5 had come back
+//   0.6c (2012-07-24) improve documentation
+//   0.6b (2012-07-20) fix a few more warnings
+//   0.6  (2012-07-17) fix warnings; added stbtt_ScaleForMappingEmToPixels,
+//                        stbtt_GetFontBoundingBox, stbtt_IsGlyphEmpty
+//   0.5  (2011-12-09) bugfixes:
 //                        subpixel glyph renderer computed wrong bounding box
 //                        first vertex of shape can be off-curve (FreeSans)
-//   0.4b(2011-12-03) fixed an error in the font baking example
-//   0.4 (2011-12-01) kerning, subpixel rendering (tor)
+//   0.4b (2011-12-03) fixed an error in the font baking example
+//   0.4  (2011-12-01) kerning, subpixel rendering (tor)
 //                    bugfixes for:
 //                        codepoint-to-glyph conversion using table fmt=12
 //                        codepoint-to-glyph conversion using table fmt=4
 //                        stbtt_GetBakedQuad with non-square texture (Zer)
 //                    updated Hello World! sample to use kerning and subpixel
 //                    fixed some warnings
-//   0.3 (2009-06-24) cmap fmt=12, compound shapes (MM)
+//   0.3  (2009-06-24) cmap fmt=12, compound shapes (MM)
 //                    userdata, malloc-from-userdata, non-zero fill (STB)
-//   0.2 (2009-03-11) Fix unsigned/signed char warnings
-//   0.1 (2009-03-09) First public release
+//   0.2  (2009-03-11) Fix unsigned/signed char warnings
+//   0.1  (2009-03-09) First public release
 //
-// USAGE
+// LICENSE
+//
+//   This software is in the public domain. Where that dedication is not
+//   recognized, you are granted a perpetual, irrevokable license to copy
+//   and modify this file as you see fit.// USAGE
 //
 //   Include this file in whatever places neeed to refer to it. In ONE C/C++
 //   file, write:
@@ -111,21 +131,76 @@ namespace TrueTypeSharp
 //           stbtt_GetFontVMetrics()
 //           stbtt_GetCodepointKernAdvance()
 //
+// ADDITIONAL DOCUMENTATION
+//
+//   Immediately after this block comment are a series of sample programs.
+//
+//   After the sample programs is the "header file" section. This section
+//   includes documentation for each API function.
+//
+//   Some important concepts to understand to use this library:
+//
+//      Codepoint
+//         Characters are defined by unicode codepoints, e.g. 65 is
+//         uppercase A, 231 is lowercase c with a cedilla, 0x7e30 is
+//         the hiragana for "ma".
+//
+//      Glyph
+//         A visual character shape (every codepoint is rendered as
+//         some glyph)
+//
+//      Glyph index
+//         A font-specific integer ID representing a glyph
+//
+//      Baseline
+//         Glyph shapes are defined relative to a baseline, which is the
+//         bottom of uppercase characters. Characters extend both above
+//         and below the baseline.
+//
+//      Current Point
+//         As you draw text to the screen, you keep track of a "current point"
+//         which is the origin of each character. The current point's vertical
+//         position is the baseline. Even "baked fonts" use this model.
+//
+//      Vertical Font Metrics
+//         The vertical qualities of the font, used to vertically position
+//         and space the characters. See docs for stbtt_GetFontVMetrics.
+//
+//      Font Size in Pixels or Points
+//         The preferred interface for specifying font sizes in stb_truetype
+//         is to specify how tall the font's vertical extent should be in pixels.
+//         If that sounds good enough, skip the next paragraph.
+//
+//         Most font APIs instead use "points", which are a common typographic
+//         measurement for describing font size, defined as 72 points per inch.
+//         stb_truetype provides a point API for compatibility. However, true
+//         "per inch" conventions don't make much sense on computer displays
+//         since they different monitors have different number of pixels per
+//         inch. For example, Windows traditionally uses a convention that
+//         there are 96 pixels per inch, thus making 'inch' measurements have
+//         nothing to do with inches, and thus effectively defining a point to
+//         be 1.333 pixels. Additionally, the TrueType font data provides
+//         an explicit scale factor to scale a given font's glyphs to points,
+//         but the author has observed that this scale factor is often wrong
+//         for non-commercial fonts, thus making fonts scaled in points
+//         according to the TrueType spec incoherently sized in practice.
+//
 // ADVANCED USAGE
 //
 //   Quality:
 //
 //    - Use the functions with Subpixel at the end to allow your characters
 //      to have subpixel positioning. Since the font is anti-aliased, not
-//      hinted, this is very import for quality.
+//      hinted, this is very import for quality. (This is not possible with
+//      baked fonts.)
 //
 //    - Kerning is now supported, and if you're supporting subpixel rendering
 //      then kerning is worth using to give your text a polished look.
 //
 //   Performance:
 //
-//    - Convert Unicode codepoints to "glyphs" and operate on the glyphs; if
-//      you don't do this, stb_truetype is forced to do the conversion on
+//    - Convert Unicode codepoints to glyph indexes and operate on the glyphs;
+//      if you don't do this, stb_truetype is forced to do the conversion on
 //      every call.
 //
 //    - There are a lot of memory allocations. We should modify it to take
@@ -144,11 +219,11 @@ namespace TrueTypeSharp
 //   recommend it.
 //
 //
-// SOURCE STATISTICS (based on v0.5, 1980 LOC)
+// SOURCE STATISTICS (based on v0.6c, 2050 LOC)
 //
-//   Documentation & header file        450 LOC  \___ 550 LOC documentation
+//   Documentation & header file        520 LOC  \___ 660 LOC documentation
 //   Sample code                        140 LOC  /
-//   Truetype parsing                   590 LOC  ---- 600 LOC TrueType
+//   Truetype parsing                   620 LOC  ---- 620 LOC TrueType
 //   Software rasterization             240 LOC  \                           .
 //   Curve tesselation                  120 LOC   \__ 550 LOC Bitmap creation
 //   Bitmap management                  100 LOC   /
@@ -165,13 +240,21 @@ namespace TrueTypeSharp
 
         static int STBTT_ifloor(float x) { return (int)Math.Floor(x); }
         static int STBTT_iceil(float x) { return (int)Math.Ceiling(x); }
-/*
-   // #define your own functions "STBTT_malloc" / "STBTT_free" to avoid malloc.h
-   #ifndef STBTT_malloc
-   #include <malloc.h>
-   #define STBTT_malloc(x,u)  malloc(x)
-   #define STBTT_free(x,u)    free(x)
+
+/*   #ifndef STBTT_sqrt
+   #include <math.h>
+   #define STBTT_sqrt(x)      sqrt(x)
    #endif*/
+
+        static float STBTT_sqrt(float x) { return (float)Math.Sqrt(x); }
+
+/*
+    // #define your own functions "STBTT_malloc" / "STBTT_free" to avoid malloc.h
+    #ifndef STBTT_malloc
+    #include <stdlib.h>
+    #define STBTT_malloc(x,u)  ((void)(u),malloc(x))
+    #define STBTT_free(x,u)    ((void)(u),free(x))
+    #endif*/
 
         class DelegateComparer<T> : IComparer<T>
         {
@@ -413,6 +496,12 @@ public static int stbtt_InitFont(ref stbtt_fontinfo info, FakePtr<byte> data2, i
                   break;
             }
             break;
+         case STBTT_PLATFORM_ID.STBTT_PLATFORM_ID_UNICODE:
+            // Mac/iOS has these
+            // all the encodingIDs are unicode, so we don't bother to check it
+            info.index_map = cmap + ttULONG(data + encoding_record + 4);
+            break;
+
       }
    }
    if (info.index_map == 0)
@@ -422,12 +511,12 @@ public static int stbtt_InitFont(ref stbtt_fontinfo info, FakePtr<byte> data2, i
    return 1;
 }
 
-public static uint stbtt_FindGlyphIndex(ref stbtt_fontinfo info, uint unicode_codepoint)
+public static int stbtt_FindGlyphIndex(ref stbtt_fontinfo info, int unicode_codepoint)
 {
     return stbtt_FindGlyphIndexOrNull(ref info, unicode_codepoint) ?? 0;
 }
 
-public static uint? stbtt_FindGlyphIndexOrNull(ref stbtt_fontinfo info, uint unicode_codepoint)
+public static int? stbtt_FindGlyphIndexOrNull(ref stbtt_fontinfo info, int unicode_codepoint)
 {
    FakePtr<byte> data = info.data;
    uint index_map = info.index_map;
@@ -469,13 +558,10 @@ public static uint? stbtt_FindGlyphIndexOrNull(ref stbtt_fontinfo info, uint uni
       // now decrement to bias correctly to find smallest
       search -= 2;
       while (entrySelector != 0) {
-         ushort start_, end_;
          searchRange >>= 1;
-         start_ = ttUSHORT(data + search + 2 + segcount*2 + 2);
-         end_ = ttUSHORT(data + search + 2);
-         start_ = ttUSHORT(data + search + searchRange*2 + segcount*2 + 2);
-         end_ = ttUSHORT(data + search + searchRange*2);
-         if (unicode_codepoint > end_)
+         start = ttUSHORT(data + search + searchRange*2 + segcount*2 + 2);
+         end = ttUSHORT(data + search + searchRange*2);
+         if (unicode_codepoint > end)
             search += (uint)searchRange*2;
          --entrySelector;
       }
@@ -510,9 +596,9 @@ public static uint? stbtt_FindGlyphIndexOrNull(ref stbtt_fontinfo info, uint uni
          else {
             uint start_glyph = ttULONG(data+index_map+16+mid*12+8);
             if (format == 12)
-                return start_glyph + unicode_codepoint - start_char;
+                return (int)(start_glyph + (uint)unicode_codepoint - start_char);
             else // format == 13
-                return start_glyph;
+                return (int)start_glyph;
          }
       }
       return null; // not found
@@ -533,7 +619,7 @@ static void stbtt__setvertex(FakePtr<GlyphVertex> v, GlyphVertexType type, int x
     v.Value = _;
 }
 
-static int stbtt__GetGlyfOffset(ref stbtt_fontinfo info, uint glyph_index)
+static int stbtt__GetGlyfOffset(ref stbtt_fontinfo info, int glyph_index)
 {
    int g1,g2;
 
@@ -551,7 +637,7 @@ static int stbtt__GetGlyfOffset(ref stbtt_fontinfo info, uint glyph_index)
    return g1==g2 ? -1 : g1; // if length is 0, return -1
 }
 
-public static int stbtt_GetGlyphBox(ref stbtt_fontinfo info, uint glyph_index,
+public static int stbtt_GetGlyphBox(ref stbtt_fontinfo info, int glyph_index,
     out int x0, out int y0, out int x1, out int y1)
 {
    int g = stbtt__GetGlyfOffset(ref info, glyph_index);
@@ -564,16 +650,16 @@ public static int stbtt_GetGlyphBox(ref stbtt_fontinfo info, uint glyph_index,
    return 1;
 }
 
-public static int stbtt_GetCodepointBox(ref stbtt_fontinfo info, uint codepoint, out int x0, out int y0, out int x1, out int y1)
+public static int stbtt_GetCodepointBox(ref stbtt_fontinfo info, int codepoint, out int x0, out int y0, out int x1, out int y1)
 {
    return stbtt_GetGlyphBox(ref info, stbtt_FindGlyphIndex(ref info, codepoint), out x0, out y0, out x1, out y1);
 }
 
-public static int stbtt_IsGlyphEmpty(ref stbtt_fontinfo info, int glyph_index)
+public static bool stbtt_IsGlyphEmpty(ref stbtt_fontinfo info, int glyph_index)
 {
-   stbtt_int16 numberOfContours;
-   int g = stbtt__GetGlyfOffset(info, glyph_index);
-   if (g < 0) return 1;
+   short numberOfContours;
+   int g = stbtt__GetGlyfOffset(ref info, glyph_index);
+   if (g < 0) return true;
    numberOfContours = ttSHORT(info.data + g);
    return numberOfContours == 0;
 }
@@ -597,7 +683,7 @@ static int stbtt__close_shape(FakePtr<GlyphVertex> vertices, int num_vertices, i
     return num_vertices;
 }
 
-public static int stbtt_GetGlyphShape(ref stbtt_fontinfo info, uint glyph_index, out FakePtr<GlyphVertex> pvertices)
+public static int stbtt_GetGlyphShape(ref stbtt_fontinfo info, int glyph_index, out FakePtr<GlyphVertex> pvertices)
 {
    short numberOfContours;
    FakePtr<byte> endPtsOfContours;
@@ -682,7 +768,7 @@ public static int stbtt_GetGlyphShape(ref stbtt_fontinfo info, uint glyph_index,
 
       // now convert them to our format
       num_vertices=0;
-      sx = sy = cx = cy = 0;
+      sx = sy = cx = cy = scx = scy = 0;
       for (i=0; i < n; ++i) {
          flags = (byte)vertices[off+i].Type;
          x     = (short) vertices[off+i].X;
@@ -776,8 +862,8 @@ public static int stbtt_GetGlyphShape(ref stbtt_fontinfo info, uint glyph_index,
          }
          
          // Find transformation scales.
-         m = (float) Math.Sqrt(mtx0*mtx0 + mtx1*mtx1);
-         n = (float) Math.Sqrt(mtx2*mtx2 + mtx3*mtx3);
+         m = (float) STBTT_sqrt(mtx0*mtx0 + mtx1*mtx1);
+         n = (float) STBTT_sqrt(mtx2*mtx2 + mtx3*mtx3);
 
          // Get indexed glyph.
          comp_num_verts = stbtt_GetGlyphShape(ref info, gidx, out comp_verts);
@@ -824,7 +910,7 @@ public static int stbtt_GetGlyphShape(ref stbtt_fontinfo info, uint glyph_index,
    return num_vertices;
 }
 
-public static void stbtt_GetGlyphHMetrics(ref stbtt_fontinfo info, uint glyph_index,
+public static void stbtt_GetGlyphHMetrics(ref stbtt_fontinfo info, int glyph_index,
     out int advanceWidth, out int leftSideBearing)
 {
    ushort numOfLongHorMetrics = ttUSHORT(info.data+info.hhea + 34);
@@ -837,7 +923,7 @@ public static void stbtt_GetGlyphHMetrics(ref stbtt_fontinfo info, uint glyph_in
    }
 }
 
-public static int stbtt_GetGlyphKernAdvance(ref stbtt_fontinfo info, uint glyph1, uint glyph2)
+public static int stbtt_GetGlyphKernAdvance(ref stbtt_fontinfo info, int glyph1, int glyph2)
 {
    FakePtr<byte> data = info.data + info.kern;
    uint needle, straw;
@@ -853,7 +939,7 @@ public static int stbtt_GetGlyphKernAdvance(ref stbtt_fontinfo info, uint glyph1
 
    l = 0;
    r = ttUSHORT(data+10) - 1;
-   needle = glyph1 << 16 | glyph2;
+   needle = (uint)(glyph1 << 16 | glyph2);
    while (l <= r) {
       m = (l + r) >> 1;
       straw = ttULONG(data+18+(m*6)); // note: unaligned read
@@ -867,14 +953,14 @@ public static int stbtt_GetGlyphKernAdvance(ref stbtt_fontinfo info, uint glyph1
    return 0;
 }
 
-public static int stbtt_GetCodepointKernAdvance(ref stbtt_fontinfo info, uint ch1, uint ch2)
+public static int stbtt_GetCodepointKernAdvance(ref stbtt_fontinfo info, int ch1, int ch2)
 {
    if (0 == info.kern) // if no kerning table, don't waste time looking up both codepoint->glyphs
       return 0;
    return stbtt_GetGlyphKernAdvance(ref info, stbtt_FindGlyphIndex(ref info, ch1), stbtt_FindGlyphIndex(ref info, ch2));
 }
 
-public static void stbtt_GetCodepointHMetrics(ref stbtt_fontinfo info, uint codepoint,
+public static void stbtt_GetCodepointHMetrics(ref stbtt_fontinfo info, int codepoint,
     out int advanceWidth, out int leftSideBearing)
 {
    stbtt_GetGlyphHMetrics(ref info, stbtt_FindGlyphIndex(ref info, codepoint), out advanceWidth, out leftSideBearing);
@@ -918,7 +1004,7 @@ public static void stbtt_FreeShape(ref stbtt_fontinfo info, FakePtr<GlyphVertex>
 // antialiasing software rasterizer
 //
 
-public static void stbtt_GetGlyphBitmapBoxSubpixel(ref stbtt_fontinfo font, uint glyph,
+public static void stbtt_GetGlyphBitmapBoxSubpixel(ref stbtt_fontinfo font, int glyph,
     float scale_x, float scale_y, float shift_x, float shift_y,
     out int ix0, out int iy0, out int ix1, out int iy1)
 {
@@ -932,14 +1018,14 @@ public static void stbtt_GetGlyphBitmapBoxSubpixel(ref stbtt_fontinfo font, uint
    iy1 = -STBTT_ifloor(y0 * scale_y + shift_y);
 }
 
-public static void stbtt_GetGlyphBitmapBox(ref stbtt_fontinfo font, uint glyph,
+public static void stbtt_GetGlyphBitmapBox(ref stbtt_fontinfo font, int glyph,
     float scale_x, float scale_y,
     out int ix0, out int iy0, out int ix1, out int iy1)
 {
     stbtt_GetGlyphBitmapBoxSubpixel(ref font, glyph, scale_x, scale_y, 0, 0, out ix0, out iy0, out ix1, out iy1);
 }
 
-public static void stbtt_GetCodepointBitmapBoxSubpixel(ref stbtt_fontinfo font, uint codepoint,
+public static void stbtt_GetCodepointBitmapBoxSubpixel(ref stbtt_fontinfo font, int codepoint,
     float scale_x, float scale_y, float shift_x, float shift_y,
     out int ix0, out int iy0, out int ix1, out int iy1)
 {
@@ -947,7 +1033,7 @@ public static void stbtt_GetCodepointBitmapBoxSubpixel(ref stbtt_fontinfo font, 
         scale_x, scale_y, shift_x, shift_y, out ix0, out iy0, out ix1, out iy1);
 }
 
-public static void stbtt_GetCodepointBitmapBox(ref stbtt_fontinfo font, uint codepoint,
+public static void stbtt_GetCodepointBitmapBox(ref stbtt_fontinfo font, int codepoint,
     float scale_x, float scale_y, out int ix0, out int iy0, out int ix1, out int iy1)
 {
     stbtt_GetCodepointBitmapBoxSubpixel(ref font, codepoint, scale_x, scale_y, 0, 0, out ix0, out iy0, out ix1, out iy1);
@@ -1318,7 +1404,7 @@ public static void stbtt_FreeBitmap(FakePtr<byte> bitmap)
 
 public static FakePtr<byte> stbtt_GetGlyphBitmapSubpixel(ref stbtt_fontinfo info,
     float scale_x, float scale_y, float shift_x, float shift_y,
-    uint glyph, out int width, out int height, out int xoff, out int yoff)
+    int glyph, out int width, out int height, out int xoff, out int yoff)
 {
    int ix0=0,iy0=0,ix1=0,iy1=0;
    stbtt__bitmap gbm;
@@ -1331,7 +1417,7 @@ public static FakePtr<byte> stbtt_GetGlyphBitmapSubpixel(ref stbtt_fontinfo info
       scale_y = scale_x;
    }
 
-   stbtt_GetGlyphBitmapBox(ref info, glyph, scale_x, scale_y, out ix0,out iy0,out ix1,out iy1);
+   stbtt_GetGlyphBitmapBoxSubpixel(ref info, glyph, scale_x, scale_y, shift_x, shift_y, out ix0,out iy0,out ix1,out iy1);
 
    // now we get the size
    gbm.w = (ix1 - ix0);
@@ -1357,7 +1443,7 @@ public static FakePtr<byte> stbtt_GetGlyphBitmapSubpixel(ref stbtt_fontinfo info
 
 public static FakePtr<byte> stbtt_GetGlyphBitmap(ref stbtt_fontinfo info,
     float scale_x, float scale_y,
-    uint glyph, out int width, out int height, out int xoff, out int yoff)
+    int glyph, out int width, out int height, out int xoff, out int yoff)
 {
     return stbtt_GetGlyphBitmapSubpixel(ref info, scale_x, scale_y, 0, 0, glyph,
         out width, out height, out xoff, out yoff);
@@ -1365,7 +1451,7 @@ public static FakePtr<byte> stbtt_GetGlyphBitmap(ref stbtt_fontinfo info,
 
 public static void stbtt_MakeGlyphBitmapSubpixel(ref stbtt_fontinfo info, FakePtr<byte> output,
     int out_w, int out_h, int out_stride,
-    float scale_x, float scale_y, float shift_x, float shift_y, uint glyph)
+    float scale_x, float scale_y, float shift_x, float shift_y, int glyph)
 {
    int ix0=0,iy0=0;
    FakePtr<GlyphVertex> vertices;
@@ -1386,14 +1472,14 @@ public static void stbtt_MakeGlyphBitmapSubpixel(ref stbtt_fontinfo info, FakePt
 }
 
 public static void stbtt_MakeGlyphBitmap(ref stbtt_fontinfo info, FakePtr<byte> output,
-    int out_w, int out_h, int out_stride, float scale_x, float scale_y, uint glyph)
+    int out_w, int out_h, int out_stride, float scale_x, float scale_y, int glyph)
 {
     stbtt_MakeGlyphBitmapSubpixel(ref info, output, out_w, out_h, out_stride,
         scale_x, scale_y, 0, 0, glyph);
 }
 
 public static FakePtr<byte> stbtt_GetCodepointBitmapSubpixel(ref stbtt_fontinfo info,
-    float scale_x, float scale_y, float shift_x, float shift_y, uint codepoint,
+    float scale_x, float scale_y, float shift_x, float shift_y, int codepoint,
     out int width, out int height, out int xoff, out int yoff)
 {
    return stbtt_GetGlyphBitmapSubpixel(ref info, scale_x, scale_y,shift_x,shift_y,
@@ -1402,14 +1488,14 @@ public static FakePtr<byte> stbtt_GetCodepointBitmapSubpixel(ref stbtt_fontinfo 
 
 public static void stbtt_MakeCodepointBitmapSubpixel(ref stbtt_fontinfo info,
     FakePtr<byte> output, int out_w, int out_h, int out_stride,
-    float scale_x, float scale_y, float shift_x, float shift_y, uint codepoint)
+    float scale_x, float scale_y, float shift_x, float shift_y, int codepoint)
 {
    stbtt_MakeGlyphBitmapSubpixel(ref info, output, out_w, out_h, out_stride,
        scale_x, scale_y, shift_x, shift_y, stbtt_FindGlyphIndex(ref info, codepoint));
 }
 
 public static FakePtr<byte> stbtt_GetCodepointBitmap(ref stbtt_fontinfo info,
-    float scale_x, float scale_y, uint codepoint,
+    float scale_x, float scale_y, int codepoint,
     out int width, out int height, out int xoff, out int yoff)
 {
    return stbtt_GetCodepointBitmapSubpixel(ref info, scale_x, scale_y, 0, 0, codepoint,
@@ -1418,7 +1504,7 @@ public static FakePtr<byte> stbtt_GetCodepointBitmap(ref stbtt_fontinfo info,
 
 public static void stbtt_MakeCodepointBitmap(ref stbtt_fontinfo info,
     FakePtr<byte> output, int out_w, int out_h, int out_stride,
-    float scale_x, float scale_y, uint codepoint)
+    float scale_x, float scale_y, int codepoint)
 {
    stbtt_MakeCodepointBitmapSubpixel(ref info, output, out_w, out_h, out_stride,
        scale_x, scale_y, 0, 0, codepoint);
@@ -1442,12 +1528,12 @@ public static int stbtt_BakeFontBitmap(ref stbtt_fontinfo f,
    bottom_y = 1;
 
    for (i=0; i < num_chars; ++i) {
-      uint? g = stbtt_FindGlyphIndexOrNull(ref f, (uint)(first_char + i));
+      int? g = stbtt_FindGlyphIndexOrNull(ref f, first_char + i);
       if (g == null) { chardata[i] = new BakedChar() { X0 = (ushort)x, X1 = (ushort)x, Y0 = (ushort)y, Y1 = (ushort)y }; continue; }
 
       int advance = 0, lsb = 0, x0 = 0, y0 = 0, x1 = 0, y1 = 0, gw, gh;
-      stbtt_GetGlyphHMetrics(ref f, (uint)g, out advance, out lsb);
-      stbtt_GetGlyphBitmapBox(ref f, (uint)g, xScale, yScale, out x0, out y0, out x1, out y1);
+      stbtt_GetGlyphHMetrics(ref f, g.Value, out advance, out lsb);
+      stbtt_GetGlyphBitmapBox(ref f, g.Value, xScale, yScale, out x0, out y0, out x1, out y1);
       gw = x1 - x0;
       gh = y1 - y0;
       if (x + gw + 1 >= pw)
@@ -1456,7 +1542,7 @@ public static int stbtt_BakeFontBitmap(ref stbtt_fontinfo f,
           return -i;
       STBTT_assert(x + gw < pw);
       STBTT_assert(y + gh < ph);
-      stbtt_MakeGlyphBitmap(ref f, pixels + x + y * pw, gw, gh, pstride, xScale, yScale, (uint)g);
+      stbtt_MakeGlyphBitmap(ref f, pixels + x + y * pw, gw, gh, pstride, xScale, yScale, g.Value);
 
        {
            BakedChar _;

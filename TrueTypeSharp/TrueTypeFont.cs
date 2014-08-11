@@ -141,9 +141,9 @@ namespace TrueTypeSharp
             return bitmap;
         }
 
-        public uint FindGlyphIndex(char codepoint)
+        public int FindGlyphIndex(char codepoint)
         {
-            return stb_truetype.stbtt_FindGlyphIndex(ref _info, (uint)codepoint);
+            return stb_truetype.stbtt_FindGlyphIndex(ref _info, (int)codepoint);
         }
 
         public void FlattenCurves(GlyphVertex[] vertices, float flatness,
@@ -162,7 +162,7 @@ namespace TrueTypeSharp
             points = contours.GetData(pointCount);
         }
 
-        public byte[] GetGlyphBitmapSubpixel(uint glyphIndex, float xScale, float yScale, float xShift, float yShift,
+        public byte[] GetGlyphBitmapSubpixel(int glyphIndex, float xScale, float yScale, float xShift, float yShift,
             out int width, out int height, out int xOffset, out int yOffset)
         {
             var data = stb_truetype.stbtt_GetGlyphBitmapSubpixel(ref _info, xScale, yScale, xShift, yShift, glyphIndex,
@@ -171,14 +171,14 @@ namespace TrueTypeSharp
             return data.GetData(width * height);
         }
 
-        public byte[] GetGlyphBitmap(uint glyphIndex, float xScale, float yScale,
+        public byte[] GetGlyphBitmap(int glyphIndex, float xScale, float yScale,
             out int width, out int height, out int xOffset, out int yOffset)
         {
             return GetGlyphBitmapSubpixel(glyphIndex, xScale, yScale, 0, 0,
                 out width, out height, out xOffset, out yOffset);
         }
 
-        public void MakeGlyphBitmapSubpixel(uint glyphIndex,
+        public void MakeGlyphBitmapSubpixel(int glyphIndex,
             float xScale, float yScale, float xShift, float yShift,
             FontBitmap bitmap)
         {
@@ -188,12 +188,12 @@ namespace TrueTypeSharp
                 xScale, yScale, xShift, yShift, glyphIndex);
         }
 
-        public void MakeGlyphBitmap(uint glyphIndex, float xScale, float yScale, FontBitmap bitmap)
+        public void MakeGlyphBitmap(int glyphIndex, float xScale, float yScale, FontBitmap bitmap)
         {
             MakeGlyphBitmapSubpixel(glyphIndex, xScale, yScale, 0, 0, bitmap);
         }
 
-        public void GetGlyphBitmapBoxSubpixel(uint glyphIndex,
+        public void GetGlyphBitmapBoxSubpixel(int glyphIndex,
             float xScale, float yScale, float xShift, float yShift,
             out int x0, out int y0, out int x1, out int y1)
         {
@@ -201,33 +201,33 @@ namespace TrueTypeSharp
                 xScale, yScale, xShift, yShift, out x0, out y0, out x1, out y1);
         }
 
-        public void GetGlyphBitmapBox(uint glyphIndex, float xScale, float yScale,
+        public void GetGlyphBitmapBox(int glyphIndex, float xScale, float yScale,
             out int x0, out int y0, out int x1, out int y1)
         {
             GetGlyphBitmapBoxSubpixel(glyphIndex, xScale, yScale, 0, 0, out x0, out y0, out x1, out y1);
         }
 
-        public void GetGlyphBox(uint glyphIndex,
+        public void GetGlyphBox(int glyphIndex,
             out int x0, out int y0, out int x1, out int y1)
         {
             stb_truetype.stbtt_GetGlyphBox(ref _info, glyphIndex,
                 out x0, out y0, out x1, out y1);
         }
 
-        public void GetGlyphHMetrics(uint glyphIndex, out int advanceWidth, out int leftSideBearing)
+        public void GetGlyphHMetrics(int glyphIndex, out int advanceWidth, out int leftSideBearing)
         {
             stb_truetype.stbtt_GetGlyphHMetrics(ref _info, glyphIndex,
                 out advanceWidth, out leftSideBearing);
         }
 
-        public GlyphVertex[] GetGlyphShape(uint glyphIndex)
+        public GlyphVertex[] GetGlyphShape(int glyphIndex)
         {
             FakePtr<GlyphVertex> vertices;
             int n = stb_truetype.stbtt_GetGlyphShape(ref _info, glyphIndex, out vertices);
             return vertices.GetData(n);
         }
 
-        public int GetGlyphKernAdvance(uint glyph1Index, uint glyph2Index)
+        public int GetGlyphKernAdvance(int glyph1Index, int glyph2Index)
         {
             return stb_truetype.stbtt_GetGlyphKernAdvance(ref _info, glyph1Index, glyph2Index);
         }
@@ -248,9 +248,14 @@ namespace TrueTypeSharp
             lineGap = (float)lineGapI * scale;
         }
 
-        public float GetScaleForPixelHeight(float pixelHeight)
+        public float GetScaleForPixelHeight(float height)
         {
-            return stb_truetype.stbtt_ScaleForPixelHeight(ref _info, pixelHeight);
+            return stb_truetype.stbtt_ScaleForPixelHeight(ref _info, height);
+        }
+
+        public float GetScaleForMappingEmToPixels(float pixels)
+        {
+            return stb_truetype.stbtt_ScaleForMappingEmToPixels(ref _info, pixels);
         }
     }
 }
