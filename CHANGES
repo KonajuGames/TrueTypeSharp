@@ -1,0 +1,5 @@
+1.0.5 May 14, 2012:
+  Ported over stb_truetype 0.5, adding kerning and subpixel functions.
+  
+1.0.2 August 25, 2010:
+  Initial public release.
