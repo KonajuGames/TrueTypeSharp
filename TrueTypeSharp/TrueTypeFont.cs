@@ -18,6 +18,10 @@
    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
+
+/*
+ * Updated by Steve Williams for stb_truetype 0.9.
+ */
 #endregion
 
 using System;
@@ -32,6 +36,25 @@ namespace TrueTypeSharp
 
         public TrueTypeFont(byte[] data, int offset)
         {
+            InitFont(data, offset);
+        }
+
+        public TrueTypeFont(string filename)
+            : this(File.ReadAllBytes(filename), 0)
+        {
+        }
+
+        public TrueTypeFont(Stream stream)
+        {
+            using (var memStream = new MemoryStream())
+            {
+                stream.CopyTo(memStream);
+                InitFont(memStream.ToArray(), 0);
+            }
+        }
+
+        void InitFont(byte[] data, int offset)
+        {
             CheckFontData(data, offset);
 
             if (0 == stb_truetype.stbtt_InitFont(ref _info,
@@ -41,104 +64,45 @@ namespace TrueTypeSharp
             }
         }
 
-        public TrueTypeFont(string filename)
-            : this(File.ReadAllBytes(filename), 0)
-        {
-
-        }
-
         static void CheckFontData(byte[] data, int offset)
         {
-            if (data == null) { throw new ArgumentNullException("data"); }
-            if (offset < 0 || offset > data.Length) { throw new ArgumentOutOfRangeException("offset"); }
+            if (data == null)
+            {
+                throw new ArgumentNullException("data");
+            }
+            if (offset < 0 || offset > data.Length)
+            {
+                throw new ArgumentOutOfRangeException("offset");
+            }
         }
 
         public static bool TryGetFontOffsetForIndex(byte[] data, int index, out int offset)
         {
             offset = stb_truetype.stbtt_GetFontOffsetForIndex(new FakePtr<byte>() { Array = data }, index);
-            if (offset < 0) { offset = 0; return false; } else { return true; }
-        }
-
-        public int BakeFontBitmap(float pixelHeight, char firstCodepoint,
-            BakedChar[] characters, FontBitmap bitmap)
-        {
-            float scale = GetScaleForPixelHeight(pixelHeight);
-            return BakeFontBitmap(scale, scale, firstCodepoint, characters, bitmap);
+            if (offset < 0)
+            {
+                offset = 0;
+                return false;
+            }
+            return true;
         }
 
         public int BakeFontBitmap(float xScale, float yScale, char firstCodepoint,
             BakedChar[] characters, FontBitmap bitmap)
         {
-            if (!bitmap.IsValid) { throw new ArgumentException("bitmap"); }
-            if (characters == null) { throw new ArgumentNullException("characters"); }
+            if (!bitmap.IsValid)
+            {
+                throw new ArgumentException("bitmap");
+            }
+            if (characters == null)
+            {
+                throw new ArgumentNullException("characters");
+            }
 
             return stb_truetype.stbtt_BakeFontBitmap(ref _info, xScale, yScale,
                 bitmap.StartPointer, bitmap.Width, bitmap.Height, bitmap.Stride,
                 (int)firstCodepoint, characters.Length,
                 new FakePtr<BakedChar>() { Array = characters });
-        }
-
-        // generates square textures ... minimalHeight can be used to crop if desired
-        public FontBitmap BakeFontBitmap(float pixelHeight, char firstCodepoint,
-            BakedChar[] characters, out int minimalHeight)
-        {
-            int size = 16;
-            if (characters.Length == 0) { minimalHeight = 0; return new FontBitmap(0, 0); }
-
-            while (true)
-            {
-                var bitmap = new FontBitmap(size, size);
-                int result = BakeFontBitmap(pixelHeight, firstCodepoint, characters, bitmap);
-                if (result > 0) { minimalHeight = result; return bitmap; }
-
-                size *= 2;
-            }
-        }
-
-        public FontBitmap BakeFontBitmap(float pixelHeight, out BakedCharCollection characters)
-        {
-            return BakeFontBitmap(pixelHeight, out characters, false);
-        }
-
-        public FontBitmap BakeFontBitmap(float pixelHeight, out BakedCharCollection characters,
-            bool shrinkToMinimalHeight)
-        {
-            return BakeFontBitmap(pixelHeight, char.MinValue, char.MaxValue, out characters,
-                shrinkToMinimalHeight);
-        }
-
-        public FontBitmap BakeFontBitmap(float pixelHeight, char firstCodepoint,
-            char lastCodepoint, out BakedCharCollection characters)
-        {
-            if (lastCodepoint < firstCodepoint)
-            {
-                var tmp = lastCodepoint;
-                lastCodepoint = firstCodepoint;
-                firstCodepoint = tmp;
-            }
-
-            return BakeFontBitmap(pixelHeight, firstCodepoint,
-                lastCodepoint - firstCodepoint + 1, out characters);
-        }
-
-        public FontBitmap BakeFontBitmap(float pixelHeight, char firstCodepoint,
-            int characterCount, out BakedCharCollection characters)
-        {
-            return BakeFontBitmap(pixelHeight, firstCodepoint, characterCount,
-                out characters, false);
-        }
-
-        public FontBitmap BakeFontBitmap(float pixelHeight, char firstCodepoint,
-            int characterCount, out BakedCharCollection characters, bool shrinkToMinimalHeight)
-        {
-            if (characterCount < 0) { throw new ArgumentOutOfRangeException("characterCount"); }
-
-            var charArray = new BakedChar[characterCount]; int minimalHeight;
-            var bitmap = BakeFontBitmap(pixelHeight, firstCodepoint, charArray, out minimalHeight);
-            if (shrinkToMinimalHeight) { bitmap.Height = minimalHeight; bitmap = bitmap.GetTrimmedBitmap(); }
-
-            characters = new BakedCharCollection(firstCodepoint, charArray, bitmap.Width, bitmap.Height);
-            return bitmap;
         }
 
         public int FindGlyphIndex(char codepoint)
@@ -149,7 +113,10 @@ namespace TrueTypeSharp
         public void FlattenCurves(GlyphVertex[] vertices, float flatness,
             out ContourPoint[] points, out int[] contourLengths)
         {
-            if (vertices == null) { throw new ArgumentNullException("vertices"); }
+            if (vertices == null)
+            {
+                throw new ArgumentNullException("vertices");
+            }
 
             FakePtr<int> contourLengthsFP; int contourCount;
             var contours = stb_truetype.stbtt_FlattenCurves
@@ -158,7 +125,10 @@ namespace TrueTypeSharp
             contourLengths = contourLengthsFP.GetData(contourCount);
 
             int pointCount = 0;
-            foreach (var length in contourLengths) { pointCount += length; }
+            foreach (var length in contourLengths)
+            {
+                pointCount += length;
+            }
             points = contours.GetData(pointCount);
         }
 
@@ -167,7 +137,14 @@ namespace TrueTypeSharp
         {
             var data = stb_truetype.stbtt_GetGlyphBitmapSubpixel(ref _info, xScale, yScale, xShift, yShift, glyphIndex,
                 out width, out height, out xOffset, out yOffset);
-            if (data.IsNull) { width = 0; height = 0; xOffset = 0; yOffset = 0; return data.GetData(0); }
+            if (data.IsNull)
+            {
+                width = 0;
+                height = 0;
+                xOffset = 0;
+                yOffset = 0;
+                return data.GetData(0);
+            }
             return data.GetData(width * height);
         }
 
@@ -182,7 +159,11 @@ namespace TrueTypeSharp
             float xScale, float yScale, float xShift, float yShift,
             FontBitmap bitmap)
         {
-            if (bitmap.Buffer == null) { throw new ArgumentNullException("bitmap.Buffer"); }
+            if (bitmap.Buffer == null)
+            {
+                throw new ArgumentNullException("bitmap.Buffer");
+            }
+
             stb_truetype.stbtt_MakeGlyphBitmapSubpixel(ref _info,
                 bitmap.StartPointer, bitmap.Width, bitmap.Height, bitmap.Stride,
                 xScale, yScale, xShift, yShift, glyphIndex);
@@ -235,17 +216,6 @@ namespace TrueTypeSharp
         public void GetFontVMetrics(out int lineAscender, out int lineDescender, out int lineGap)
         {
             stb_truetype.stbtt_GetFontVMetrics(ref _info, out lineAscender, out lineDescender, out lineGap);
-        }
-
-        public void GetFontVMetricsAtScale(float pixelHeight, out float lineAscender, out float lineDescender, out float lineGap)
-        {
-            int lineAscenderI, lineDescenderI, lineGapI;
-            GetFontVMetrics(out lineAscenderI, out lineDescenderI, out lineGapI);
-
-            float scale = GetScaleForPixelHeight(pixelHeight);
-            lineAscender = (float)lineAscenderI * scale;
-            lineDescender = (float)lineDescenderI * scale;
-            lineGap = (float)lineGapI * scale;
         }
 
         public float GetScaleForPixelHeight(float height)

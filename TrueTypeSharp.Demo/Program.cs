@@ -61,7 +61,8 @@ namespace TrueTypeSharp.Demo
             }
 
             // Let's try baking. Tasty tasty.
-            BakedCharCollection characters; float pixelHeight = 18;
+            BakedCharCollection characters;
+            float pixelHeight = 18;
             var bitmap = font.BakeFontBitmap(pixelHeight, out characters, true);
 
             SaveBitmap(bitmap.Buffer, 0, 0, bitmap.Width, bitmap.Height, bitmap.Width, "BakeResult1.png");
